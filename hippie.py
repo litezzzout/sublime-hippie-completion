@@ -19,7 +19,7 @@ class HippieWordCompletionCommand(sublime_plugin.TextCommand):
 
 		if search_word_text != last_choice:
 			seed_search_word = search_word_text
-			lookup_index = 0
+			lookup_index = -1 if backward else 0
 			matching = []
 
 			search_word_parts = re.findall('([A-Z])?([^A-Z]*)', search_word_text)
