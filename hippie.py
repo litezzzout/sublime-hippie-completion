@@ -93,6 +93,20 @@ class Listner(sublime_plugin.EventListener):
 def did_match(word: str, search_word_text: str, search_word_parts: list)->bool:
 	result = False
 	if len(search_word_text) > 1 and '_' in word:
+
+		priortize = False                  # prefer matching first letters in combined_word
+		for part in word.split('_'):       # not my preferance but some people my find useful
+			if part[0] in search_word_text:
+				priortize = True
+			else:
+				priortize = False
+				break
+		if priortize:
+			matching.insert(0, word)
+			return False
+
+
+
 		for char in search_word_text:
 			if char in word:
 				result = True
