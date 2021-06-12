@@ -8,5 +8,6 @@
     { "keys": ["tab"], "command": "hippie_word_completion", "context": [
         { "key": "has_snippet", "operand": false  },
         { "key": "preceding_text", "operator": "regex_contains", "operand": "\\w+", "match_all": true },
+	{ "key": "auto_complete_visible", "operand": false },
     ]}
 ]
