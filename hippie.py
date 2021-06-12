@@ -2,99 +2,109 @@ import sublime
 import sublime_plugin
 import re
 
-VIEW_TOO_BIG = 1000000
-WORD_PATTERN = re.compile(r'(\w{2,})', re.S)  # Start from words of length 2
 
-words_by_view = {}
-words_global = set()
 matching = []
-lookup_index = 0
 last_choice = ''
-
-
+seed_search_word = ''
+lookup_index = 0
 class HippieWordCompletionCommand(sublime_plugin.TextCommand):
-    def run(self, edit):
-        global last_choice, lookup_index, matching
+	def run(self, edit, backward=False):
+		global last_choice
+		global lookup_index
+		global matching
+		global seed_search_word
 
-        primer_region = self.view.word(self.view.sel()[0])
-        primer = self.view.substr(primer_region)
+		search_word_region = self.view.word(self.view.sel()[0])
+		search_word_text = self.view.substr(search_word_region)
 
-        def _matching(*sets):
-            for s in sets:
-                yield from fuzzyfind(primer, s)
-            yield primer  # Always be able to cycle back
+		if search_word_text != last_choice:
+			seed_search_word = search_word_text
+			lookup_index = 0
+			matching = []
 
-        if primer != last_choice:
-            lookup_index = 0
-            matching = ldistinct(_matching(words_by_view[self.view], words_global))
+			search_word_parts = re.findall('([A-Z])?([^A-Z]*)', search_word_text)
+			search_word_parts = [item for t in search_word_parts for item in t if item]
+			# print(search_word_parts)
+			
+			# [matching.append(s) for s in reversed(word_list) if s not in matching and s != search_word_text and s[0] == search_word_text[0] and did_match(s, search_word_text, search_word_parts]
+			for word in reversed(word_list):
+				if word not in matching and word != search_word_text and word[0] == search_word_text[0] and did_match(word, search_word_text, search_word_parts):
+					matching.append(word)
 
-        if matching[lookup_index] == primer:
-            lookup_index += 1
-        if lookup_index >= len(matching):
-            lookup_index = 0
-        last_choice = matching[lookup_index]
+			if not matching:
+				for w_list in word_list_global.values():
+					[matching.append(s) for s in w_list if s not in matching and s != search_word_text and s[0] == search_word_text[0] and did_match(s, search_word_text, search_word_parts)]
 
-        self.view.replace(edit, primer_region, last_choice)
+			if not matching:
+				return
 
+		else:
+			 lookup_index += -1 if backward else +1
 
-class HippieListener(sublime_plugin.EventListener):
-    def on_init(self, views):
-        for view in views:
-            index_view(view)
+			
+		try:
+			last_choice = matching[lookup_index]
+		except IndexError:
+			# lookup_index = 0
+			search_word_parts = re.findall('([A-Z])?([^A-Z]*)', seed_search_word)
+			search_word_parts = [item for t in search_word_parts for item in t if item]
 
-    def on_modified_async(self, view):
-        index_view(view)
+			for w_list in word_list_global.values():
+				[matching.append(s) for s in w_list if s not in matching and s != search_word_text and s[0] == search_word_text[0] and  did_match(s, seed_search_word, search_word_parts)]
+		finally:
+			try:
+				last_choice = matching[lookup_index]
+			except:
+				lookup_index = 0
+				last_choice = matching[lookup_index]
 
+		for caret in self.view.sel():
+			self.view.replace(edit, self.view.word(caret), last_choice)
 
-def index_view(view):
-    if view.size() > VIEW_TOO_BIG:
-        return
-    contents = view.substr(sublime.Region(0, view.size()))
-    words_by_view[view] = words = set(WORD_PATTERN.findall(contents))
-    words_global.update(words)
-
-
-def fuzzyfind(primer, collection, sort_results=True):
-    """
-    Args:
-        primer (str): A partial string which is typically entered by a user.
-        collection (iterable): A collection of strings which will be filtered
-                               based on the `primer`.
-        sort_results(bool): The suggestions are sorted by considering the
-                            smallest contiguous match, followed by where the
-                            match is found in the full string. If two suggestions
-                            have the same rank, they are then sorted
-                            alpha-numerically. This parameter controls the
-                            *last tie-breaker-alpha-numeric sorting*. The sorting
-                            based on match length and position will be intact.
-    Returns:
-        suggestions (generator): A generator object that produces a list of
-            suggestions narrowed down from `collection` using the `primer`.
-    """
-    suggestions = []
-    pat = '.*?'.join(map(re.escape, primer))
-    pat = '(?=({0}))'.format(pat)   # lookahead regex to manage overlapping matches
-    regex = re.compile(pat, re.IGNORECASE)
-    for item in collection:
-        if item == primer:
-            continue
-        r = list(regex.finditer(item))
-        if r:
-            best = min(r, key=lambda x: len(x.group(1)))   # find shortest match
-            suggestions.append((len(best.group(1)), best.start(), item, item))
-
-    if sort_results:
-        return [z[-1] for z in sorted(suggestions)]
-    else:
-        return [z[-1] for z in sorted(suggestions, key=lambda x: x[:2])]
+		# self.view.replace(edit, search_word_region, last_choice)
 
 
-def ldistinct(seq):
-    """Iterates over sequence skipping duplicates"""
-    seen = set()
-    res = []
-    for item in seq:
-        if item not in seen:
-            seen.add(item)
-            res.append(item)
-    return res
+word_list_global = {}
+word_pattern = re.compile(r'(\w+)', re.S)
+class Listner(sublime_plugin.EventListener):
+	def on_init(self, views):
+		global word_list_global
+		# [print(a.file_name()) for a in views]
+		for view in views:
+			contents = view.substr(sublime.Region(0, view.size()))
+			word_list_global[view.file_name()] = word_pattern.findall(contents)
+
+		# print(word_list_global)
+		
+
+	def on_modified_async(self, view):
+		global word_list
+		try:
+			first_half  = view.substr(sublime.Region(0, view.sel()[0].begin()))
+			second_half = view.substr(sublime.Region(view.sel()[0].begin(), view.size()))
+			word_list = word_pattern.findall(second_half)
+			word_list.extend(word_pattern.findall(first_half))
+			word_list_global[view.file_name()] = word_list
+			# print(word_list)
+		except:
+			pass
+
+
+def did_match(word: str, search_word_text: str, search_word_parts: list)->bool:
+	result = False
+	if len(search_word_text) > 1 and '_' in word:
+		for char in search_word_text:
+			if char in word:
+				result = True
+			else:
+				result = False
+				break
+	else:
+		for word_part in  search_word_parts:
+			if word_part in word:
+				result = True
+			else:
+				result = False
+				break
+	
+	return result
