@@ -1,8 +1,9 @@
 [
-    { "keys": ["shift+tab"], "command": "hippie_word_completion","args": {"backward": true}, "context":
-	[
-		{ "key": "has_snippet", "operand": false  },
-		{ "key": "preceding_text", "operator": "regex_contains", "operand": "\\w+", "match_all": true },
+    { "keys": ["shift+tab"], "command": "hippie_word_completion","args": {"backward": true}, "context": [
+	{ "key": "has_snippet", "operand": false  },
+	{ "key": "preceding_text", "operator": "regex_contains", "operand": "\\w+", "match_all": true },
+	{ "key": "auto_complete_visible", "operand": false },
+	{ "key": "selection_empty", "operator": "equal", "operand": true, "match_all": true }
 	]},
 
     { "keys": ["tab"], "command": "hippie_word_completion", "context": [
