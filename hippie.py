@@ -23,11 +23,21 @@ class HippieWordCompletionCommand(sublime_plugin.TextCommand):
 
 			case_separated_s_word = [item for t in case_separator.findall(search_word) for item in t if item]
 			# print(case_separated_s_word)
-			
-			for word in word_list:
+
+			for word in word_list_s:
 				if (word not in matching and word != search_word and word[0] == search_word[0] and 
 					did_match(word, search_word, case_separated_s_word)):
 					matching.append(word)
+
+			temp_list = []
+			for word in reversed(word_list_f):
+				if (word not in temp_list and word != search_word and word[0] == search_word[0] and 
+					did_match(word, search_word, case_separated_s_word)):
+					temp_list.append(word)
+			
+			matching.extend(reversed(temp_list))
+		
+			# print(matching)
 
 			if not matching:
 				for w_list in word_list_global.values():
@@ -36,7 +46,6 @@ class HippieWordCompletionCommand(sublime_plugin.TextCommand):
 
 			if not matching:
 				return
-			# print(matching)
 
 		else:
 			 lookup_index += +1 if backward else -1
@@ -78,13 +87,16 @@ class Listener(sublime_plugin.EventListener):
 		
 
 	def on_modified_async(self, view):
-		global word_list
+		global word_list, word_list_f, word_list_s
 		try:
 			first_half  = view.substr(sublime.Region(0, view.sel()[0].begin()))
 			second_half = view.substr(sublime.Region(view.sel()[0].begin(), view.size()))
-			word_list = word_pattern.findall(second_half)
-			word_list.extend(word_pattern.findall(first_half))
+			word_list_f = word_pattern.findall(first_half)
+			word_list_s = word_pattern.findall(second_half)
+			
+			word_list = word_pattern.findall(view.substr(sublime.Region(0, view.size())))
 			word_list_global[view.file_name()] = word_list
+
 			# print(word_list)
 		except:
 			pass
@@ -94,7 +106,7 @@ def did_match(candidate_word: str, search_word: str, case_separated_s_word: list
 	result = False
 	if len(search_word) > 1 and '_' in candidate_word:
 
-		# priortize = False                  # prefer matching first letters in combined_word
+		# priortize = False					           # prefer matching first letters in combined_word
 		# for part in candidate_word.split('_'):       # not my preferance but some people my find useful
 		# 	if part[0] in search_word:
 		# 		priortize = True
