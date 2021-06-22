@@ -7,50 +7,50 @@ matching = []
 last_choice = ''
 seed_search_word = ''
 lookup_index = 0
+case_separator = re.compile(r'([A-Z])?([^A-Z]*)')
+
 class HippieWordCompletionCommand(sublime_plugin.TextCommand):
 	def run(self, edit, backward=False):
-		global last_choice
-		global lookup_index
-		global matching
-		global seed_search_word
+		global last_choice, lookup_index, matching, seed_search_word
 
 		search_word_region = self.view.word(self.view.sel()[0])
-		search_word_text = self.view.substr(search_word_region)
+		search_word = self.view.substr(search_word_region)
 
-		if search_word_text != last_choice:
-			seed_search_word = search_word_text
-			lookup_index = -1 if backward else 0
+		if search_word != last_choice:
+			seed_search_word = search_word
+			lookup_index = 0 if backward else -1
 			matching = []
 
-			search_word_parts = re.findall('([A-Z])?([^A-Z]*)', search_word_text)
-			search_word_parts = [item for t in search_word_parts for item in t if item]
-			# print(search_word_parts)
+			case_separated_s_word = [item for t in case_separator.findall(search_word) for item in t if item]
+			# print(case_separated_s_word)
 			
-			# [matching.append(s) for s in reversed(word_list) if s not in matching and s != search_word_text and s[0] == search_word_text[0] and did_match(s, search_word_text, search_word_parts]
-			for word in reversed(word_list):
-				if word not in matching and word != search_word_text and word[0] == search_word_text[0] and did_match(word, search_word_text, search_word_parts):
+			for word in word_list:
+				if (word not in matching and word != search_word and word[0] == search_word[0] and 
+					did_match(word, search_word, case_separated_s_word)):
 					matching.append(word)
 
 			if not matching:
 				for w_list in word_list_global.values():
-					[matching.append(s) for s in w_list if s not in matching and s != search_word_text and s[0] == search_word_text[0] and did_match(s, search_word_text, search_word_parts)]
+					[matching.append(s) for s in w_list if s not in matching and s != search_word and 
+					s[0] == search_word[0] and did_match(s, search_word, case_separated_s_word)]
 
 			if not matching:
 				return
+			# print(matching)
 
 		else:
-			 lookup_index += -1 if backward else +1
+			 lookup_index += +1 if backward else -1
 
 			
 		try:
 			last_choice = matching[lookup_index]
 		except IndexError:
 			# lookup_index = 0
-			search_word_parts = re.findall('([A-Z])?([^A-Z]*)', seed_search_word)
-			search_word_parts = [item for t in search_word_parts for item in t if item]
+			case_separated_s_word = [item for t in case_separator.findall(seed_search_word) for item in t if item]
 
-			for w_list in word_list_global.values():
-				[matching.append(s) for s in w_list if s not in matching and s != search_word_text and s[0] == search_word_text[0] and  did_match(s, seed_search_word, search_word_parts)]
+			for w_list in word_list_global.values(): # getting candidate words from other
+				[matching.append(s) for s in w_list if s not in matching and s != search_word and 
+				s[0] == search_word[0] and  did_match(s, seed_search_word, case_separated_s_word)]
 		finally:
 			try:
 				last_choice = matching[lookup_index]
@@ -66,7 +66,7 @@ class HippieWordCompletionCommand(sublime_plugin.TextCommand):
 
 word_list_global = {}
 word_pattern = re.compile(r'(\w+)', re.S)
-class Listner(sublime_plugin.EventListener):
+class Listener(sublime_plugin.EventListener):
 	def on_init(self, views):
 		global word_list_global
 		# [print(a.file_name()) for a in views]
@@ -90,32 +90,30 @@ class Listner(sublime_plugin.EventListener):
 			pass
 
 
-def did_match(word: str, search_word_text: str, search_word_parts: list)->bool:
+def did_match(candidate_word: str, search_word: str, case_separated_s_word: list)->bool:
 	result = False
-	if len(search_word_text) > 1 and '_' in word:
+	if len(search_word) > 1 and '_' in candidate_word:
 
-		priortize = False                  # prefer matching first letters in combined_word
-		for part in word.split('_'):       # not my preferance but some people my find useful
-			if part[0] in search_word_text:
-				priortize = True
-			else:
-				priortize = False
-				break
-		if priortize:
-			matching.insert(0, word)
-			return False
+		# priortize = False                  # prefer matching first letters in combined_word
+		# for part in candidate_word.split('_'):       # not my preferance but some people my find useful
+		# 	if part[0] in search_word:
+		# 		priortize = True
+		# 	else:
+		# 		priortize = False
+		# 		break
+		# if priortize:
+		# 	matching.insert(0, candidate_word)
+		# 	return False
 
-
-
-		for char in search_word_text:
-			if char in word:
+		for char in search_word:
+			if char in candidate_word:
 				result = True
 			else:
 				result = False
 				break
 	else:
-		for word_part in  search_word_parts:
-			if word_part in word:
+		for word_part in  case_separated_s_word:
+			if word_part in candidate_word:
 				result = True
 			else:
 				result = False
