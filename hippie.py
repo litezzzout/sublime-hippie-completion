@@ -14,7 +14,7 @@ class HippieWordCompletionCommand(sublime_plugin.TextCommand):
 		global last_choice, lookup_index, matching, seed_search_word
 
 		search_word_region = self.view.word(self.view.sel()[0])
-		search_word = self.view.substr(search_word_region)
+		search_word = self.view.substr(sublime.Region(search_word_region.a, self.view.sel()[0].end()))
 
 		if search_word != last_choice:
 			seed_search_word = search_word
@@ -22,35 +22,29 @@ class HippieWordCompletionCommand(sublime_plugin.TextCommand):
 			matching = []
 
 			case_separated_s_word = [item for t in case_separator.findall(search_word) for item in t if item]
-			# print(case_separated_s_word)
 
 			for word in word_list_s:
-				if (word not in matching and word != search_word and word[0] == search_word[0] and 
+				if (word != search_word and word[0] == search_word[0] and 
 					did_match(word, search_word, case_separated_s_word)):
 					matching.append(word)
 
 			temp_list = []
-			for word in reversed(word_list_f):
-				if (word not in temp_list and word != search_word and word[0] == search_word[0] and 
+			for word in word_list_f:
+				if (word != search_word and word[0] == search_word[0] and 
 					did_match(word, search_word, case_separated_s_word)):
 					temp_list.append(word)
-			
 			matching.extend(reversed(temp_list))
 		
-			# print(matching)
-
 			if not matching:
 				for w_list in word_list_global.values():
-					[matching.append(s) for s in w_list if s not in matching and s != search_word and 
-					s[0] == search_word[0] and did_match(s, search_word, case_separated_s_word)]
-
+					try: [matching.append(s) for s in w_list if s not in matching and s != search_word and 
+							s[0] == search_word[0] and did_match(s, search_word, case_separated_s_word)]
+					except: pass
 			if not matching:
 				return
-
 		else:
 			 lookup_index += +1 if backward else -1
-
-			
+	
 		try:
 			last_choice = matching[lookup_index]
 		except IndexError:
@@ -58,8 +52,9 @@ class HippieWordCompletionCommand(sublime_plugin.TextCommand):
 			case_separated_s_word = [item for t in case_separator.findall(seed_search_word) for item in t if item]
 
 			for w_list in word_list_global.values(): # getting candidate words from other
-				[matching.append(s) for s in w_list if s not in matching and s != search_word and 
-				s[0] == search_word[0] and  did_match(s, seed_search_word, case_separated_s_word)]
+				try: [matching.append(s) for s in w_list if s not in matching and s != search_word and 
+					s[0] == search_word[0] and  did_match(s, seed_search_word, case_separated_s_word)]
+				except: pass
 		finally:
 			try:
 				last_choice = matching[lookup_index]
@@ -68,46 +63,39 @@ class HippieWordCompletionCommand(sublime_plugin.TextCommand):
 				last_choice = matching[lookup_index]
 
 		for caret in self.view.sel():
-			self.view.replace(edit, self.view.word(caret), last_choice)
-
-		# self.view.replace(edit, search_word_region, last_choice)
-
+			self.view.replace(edit, sublime.Region(self.view.word(caret).a, caret.end()), last_choice)
 
 word_list_global = {}
 word_pattern = re.compile(r'(\w+)', re.S)
 class Listener(sublime_plugin.EventListener):
 	def on_init(self, views):
 		global word_list_global
-		# [print(a.file_name()) for a in views]
 		for view in views:
 			contents = view.substr(sublime.Region(0, view.size()))
-			word_list_global[view.file_name()] = word_pattern.findall(contents)
-
-		# print(word_list_global)
-		
+			word_list_global[view.file_name()] = list(dict.fromkeys(word_pattern.findall(contents)))
 
 	def on_modified_async(self, view):
-		global word_list, word_list_f, word_list_s
+		global word_list_f, word_list_s
 		try:
 			first_half  = view.substr(sublime.Region(0, view.sel()[0].begin()))
 			second_half = view.substr(sublime.Region(view.sel()[0].begin(), view.size()))
-			word_list_f = word_pattern.findall(first_half)
-			word_list_s = word_pattern.findall(second_half)
-			
-			word_list = word_pattern.findall(view.substr(sublime.Region(0, view.size())))
-			word_list_global[view.file_name()] = word_list
+			word_list_f = list(dict.fromkeys(reversed(word_pattern.findall(first_half))))
+			word_list_s = list(dict.fromkeys(word_pattern.findall(second_half)))
 
-			# print(word_list)
+			word_list_global[view.file_name()] = word_list_f.copy().extend(word_list_s)
 		except:
 			pass
 
 
 def did_match(candidate_word: str, search_word: str, case_separated_s_word: list)->bool:
 	result = False
-	if len(search_word) > 1 and '_' in candidate_word:
+	if search_word in candidate_word:
+		return True
 
-		# priortize = False					           # prefer matching first letters in combined_word
-		# for part in candidate_word.split('_'):       # not my preferance but some people my find useful
+	if len(search_word) > 1 and '_' in candidate_word:
+		# priortize matching first letters in combined_word
+		# priortize = False
+		# for part in candidate_word.split('_'):
 		# 	if part[0] in search_word:
 		# 		priortize = True
 		# 	else:
