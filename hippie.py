@@ -28,13 +28,18 @@ class HippieWordCompletionCommand(sublime_plugin.TextCommand):
 					did_match(word, search_word, case_separated_s_word)):
 					matching.append(word)
 
+			
 			temp_list = []
 			for word in word_list_f:
 				if (word != search_word and word[0] == search_word[0] and 
 					did_match(word, search_word, case_separated_s_word)):
 					temp_list.append(word)
+
 			matching.extend(reversed(temp_list))
-		
+
+			if len(search_word) > 2: priortize_consecutive(search_word, matching)
+			if len(search_word) > 1: priortize_combined(search_word, matching)
+			
 			if not matching:
 				for w_list in word_list_global.values():
 					try: [matching.append(s) for s in w_list if s not in matching and s != search_word and 
@@ -93,18 +98,6 @@ def did_match(candidate_word: str, search_word: str, case_separated_s_word: list
 		return True
 
 	if len(search_word) > 1 and '_' in candidate_word:
-		# priortize matching first letters in combined_word
-		# priortize = False
-		# for part in candidate_word.split('_'):
-		# 	if part[0] in search_word:
-		# 		priortize = True
-		# 	else:
-		# 		priortize = False
-		# 		break
-		# if priortize:
-		# 	matching.insert(0, candidate_word)
-		# 	return False
-
 		for char in search_word:
 			if char in candidate_word:
 				result = True
@@ -120,3 +113,25 @@ def did_match(candidate_word: str, search_word: str, case_separated_s_word: list
 				break
 	
 	return result
+
+def priortize_consecutive(query:str, matches:list):
+	for match in reversed(matches):
+		if query in match:
+			matches.remove(match)
+			matches.insert(len(matches), match)
+
+def priortize_combined(query:str, matches:list):
+	for match in matches:
+		priortize = False
+		match_part = match.split('_')
+		if len(match_part) >= len(query):
+			for part in match_part:
+				if part[0] in query:
+					query = query.replace(part[0], '', 1)
+					priortize = True
+				else:
+					priortize = False
+					break
+		if priortize:
+			matches.remove(match)
+			matches.insert(len(matches), match)
