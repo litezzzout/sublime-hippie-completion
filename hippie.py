@@ -5,45 +5,45 @@ import re
 
 matching = []
 last_choice = ''
-seed_search_word = ''
+orig_query = ''
 lookup_index = 0
 case_separator = re.compile(r'([A-Z])?([^A-Z]*)')
 
 class HippieWordCompletionCommand(sublime_plugin.TextCommand):
 	def run(self, edit, backward=False):
-		global last_choice, lookup_index, matching, seed_search_word
+		global last_choice, lookup_index, matching, orig_query
 
-		search_word_region = self.view.word(self.view.sel()[0])
-		search_word = self.view.substr(sublime.Region(search_word_region.a, self.view.sel()[0].end()))
+		query_region = self.view.word(self.view.sel()[0])
+		query = self.view.substr(sublime.Region(query_region.a, self.view.sel()[0].end()))
 
-		if search_word != last_choice:
-			seed_search_word = search_word
+		if query != last_choice:
+			orig_query = query
 			lookup_index = 0 if backward else -1
 			matching = []
 
-			case_separated_s_word = [item for t in case_separator.findall(search_word) for item in t if item]
+			query_splitted_by_case = [item for t in case_separator.findall(query) for item in t if item]
 
-			for word in word_list_s:
-				if (word != search_word and word[0] == search_word[0] and 
-					did_match(word, search_word, case_separated_s_word)):
+			for word in words_from_cursor_to_end:
+				if (word != query and word[0] == query[0] and 
+					did_match(word, query, query_splitted_by_case)):
 					matching.append(word)
 
 			
 			temp_list = []
-			for word in word_list_f:
-				if (word != search_word and word[0] == search_word[0] and 
-					did_match(word, search_word, case_separated_s_word)):
+			for word in words_from_begining_to_cursor:
+				if (word != query and word[0] == query[0] and 
+					did_match(word, query, query_splitted_by_case)):
 					temp_list.append(word)
 
 			matching.extend(reversed(temp_list))
 
-			if len(search_word) > 2: priortize_consecutive(search_word, matching)
-			if len(search_word) > 1: priortize_combined(search_word, matching)
-			
+			if len(query) > 2: priortize_consecutive(query, matching)
+			if len(query) > 1: priortize_combined(query, matching)
+	
 			if not matching:
 				for w_list in word_list_global.values():
-					try: [matching.append(s) for s in w_list if s not in matching and s != search_word and 
-							s[0] == search_word[0] and did_match(s, search_word, case_separated_s_word)]
+					try: [matching.append(s) for s in w_list if s not in matching and s != query and 
+							s[0] == query[0] and did_match(s, query, query_splitted_by_case)]
 					except: pass
 			if not matching:
 				return
@@ -54,11 +54,11 @@ class HippieWordCompletionCommand(sublime_plugin.TextCommand):
 			last_choice = matching[lookup_index]
 		except IndexError:
 			# lookup_index = 0
-			case_separated_s_word = [item for t in case_separator.findall(seed_search_word) for item in t if item]
+			query_splitted_by_case = [item for t in case_separator.findall(orig_query) for item in t if item]
 
 			for w_list in word_list_global.values(): # getting candidate words from other
-				try: [matching.append(s) for s in w_list if s not in matching and s != search_word and 
-					s[0] == search_word[0] and  did_match(s, seed_search_word, case_separated_s_word)]
+				try: [matching.append(s) for s in w_list if s not in matching and s != query and 
+					s[0] == query[0] and  did_match(s, orig_query, query_splitted_by_case)]
 				except: pass
 		finally:
 			try:
@@ -80,32 +80,32 @@ class Listener(sublime_plugin.EventListener):
 			word_list_global[view.file_name()] = list(dict.fromkeys(word_pattern.findall(contents)))
 
 	def on_modified_async(self, view):
-		global word_list_f, word_list_s
+		global words_from_begining_to_cursor, words_from_cursor_to_end
 		try:
 			first_half  = view.substr(sublime.Region(0, view.sel()[0].begin()))
 			second_half = view.substr(sublime.Region(view.sel()[0].begin(), view.size()))
-			word_list_f = list(dict.fromkeys(reversed(word_pattern.findall(first_half))))
-			word_list_s = list(dict.fromkeys(word_pattern.findall(second_half)))
+			words_from_begining_to_cursor = list(dict.fromkeys(reversed(word_pattern.findall(first_half))))
+			words_from_cursor_to_end = list(dict.fromkeys(word_pattern.findall(second_half)))
 
-			word_list_global[view.file_name()] = word_list_f.copy().extend(word_list_s)
+			word_list_global[view.file_name()] = words_from_begining_to_cursor.copy().extend(words_from_cursor_to_end)
 		except:
 			pass
 
 
-def did_match(candidate_word: str, search_word: str, case_separated_s_word: list)->bool:
+def did_match(candidate_word: str, query: str, query_splitted_by_case: list)->bool:
 	result = False
-	if search_word in candidate_word:
+	if query in candidate_word:
 		return True
 
-	if len(search_word) > 1 and '_' in candidate_word:
-		for char in search_word:
+	if len(query) > 1 and '_' in candidate_word:
+		for char in query:
 			if char in candidate_word:
 				result = True
 			else:
 				result = False
 				break
 	else:
-		for word_part in  case_separated_s_word:
+		for word_part in  query_splitted_by_case:
 			if word_part in candidate_word:
 				result = True
 			else:
@@ -115,23 +115,38 @@ def did_match(candidate_word: str, search_word: str, case_separated_s_word: list
 	return result
 
 def priortize_consecutive(query:str, matches:list):
-	for match in reversed(matches):
+	available_slot = []
+	for i in reversed(range(len(matches))):
+		match = matches[i]
 		if query in match:
-			matches.remove(match)
-			matches.insert(len(matches), match)
+			if len(available_slot) > 0:
+				matches.remove(match)
+				matches.insert(available_slot.pop(0), match)
+				available_slot.append(i)
+		else:
+			available_slot.append(i)
 
 def priortize_combined(query:str, matches:list):
-	for match in matches:
+	available_slot = []
+	for i in reversed(range(len(matches))):
+		match = matches[i]
+
 		priortize = False
 		match_part = match.split('_')
 		if len(match_part) >= len(query):
+			t_query = query
 			for part in match_part:
-				if part[0] in query:
-					query = query.replace(part[0], '', 1)
+				if part[0] in t_query:
 					priortize = True
+					t_query = t_query.replace(part[0], '', 1)
+					if not t_query: break
 				else:
 					priortize = False
 					break
 		if priortize:
-			matches.remove(match)
-			matches.insert(len(matches), match)
+			if len(available_slot) > 0:
+				matches.remove(match)
+				matches.insert(available_slot.pop(0), match)
+				available_slot.append(i)
+		else:
+			available_slot.append(i)
