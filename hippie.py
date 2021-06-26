@@ -34,11 +34,7 @@ class HippieWordCompletionCommand(sublime_plugin.TextCommand):
 				if (word != query and word[0] == query[0] and 
 					did_match(word, query, query_splitted_by_case)):
 					temp_list.append(word)
-
 			matching.extend(reversed(temp_list))
-
-			if len(query) > 2: priortize_consecutive(query, matching)
-			if len(query) > 1: priortize_combined(query, matching)
 	
 			if not matching:
 				for w_list in word_list_global.values():
@@ -47,24 +43,29 @@ class HippieWordCompletionCommand(sublime_plugin.TextCommand):
 					except: pass
 			if not matching:
 				return
+
+			if len(query) > 2: priortize_consecutive(query, matching)
+			if len(query) > 1: priortize_combined(query, matching)
 		else:
 			 lookup_index += +1 if backward else -1
 	
 		try:
 			last_choice = matching[lookup_index]
 		except IndexError:
-			# lookup_index = 0
-			query_splitted_by_case = [item for t in case_separator.findall(orig_query) for item in t if item]
-
-			for w_list in word_list_global.values(): # getting candidate words from other
-				try: [matching.append(s) for s in w_list if s not in matching and s != query and 
-					s[0] == query[0] and  did_match(s, orig_query, query_splitted_by_case)]
+			temp = []
+			orig_query_splitted_by_case = [item for t in case_separator.findall(orig_query) for item in t if item]
+			for w_list in word_list_global.values(): # getting candidate words from other files
+				try: [temp.append(s) for s in w_list if s not in matching and s != query and 
+					s[0] == query[0] and  did_match(s, orig_query, orig_query_splitted_by_case)]
 				except: pass
+			if len(query) > 2: priortize_consecutive(query, temp)
+			if len(query) > 1: priortize_combined(query, temp)
+			matching.extend(temp)
 		finally:
 			try:
 				last_choice = matching[lookup_index]
 			except:
-				lookup_index = 0
+				lookup_index = -1
 				last_choice = matching[lookup_index]
 
 		for caret in self.view.sel():
