@@ -43,7 +43,6 @@ class HippieWordCompletionCommand(sublime_plugin.TextCommand):
 					except: pass
 			if not matching:
 				return
-
 			if len(query) > 2: priortize_consecutive(query, matching)
 			if len(query) > 1: priortize_combined(query, matching)
 		else:
@@ -93,7 +92,7 @@ class Listener(sublime_plugin.EventListener):
 			pass
 
 
-def did_match(candidate_word: str, query: str, query_splitted_by_case: list)->bool:
+def did_match(candidate_word: str, query: str, query_splitted_by_case: list) -> bool:
 	result = False
 	if query in candidate_word:
 		return True
@@ -115,7 +114,7 @@ def did_match(candidate_word: str, query: str, query_splitted_by_case: list)->bo
 	
 	return result
 
-def priortize_consecutive(query:str, matches:list):
+def priortize_consecutive(query:str, matches:list) -> None:
 	available_slot = []
 	for i in reversed(range(len(matches))):
 		match = matches[i]
@@ -127,7 +126,7 @@ def priortize_consecutive(query:str, matches:list):
 		else:
 			available_slot.append(i)
 
-def priortize_combined(query:str, matches:list):
+def priortize_combined(query:str, matches:list) -> None:
 	available_slot = []
 	for i in reversed(range(len(matches))):
 		match = matches[i]
@@ -137,7 +136,7 @@ def priortize_combined(query:str, matches:list):
 		if len(match_part) >= len(query):
 			t_query = query
 			for part in match_part:
-				if part[0] in t_query:
+				if part and part[0] in t_query:
 					priortize = True
 					t_query = t_query.replace(part[0], '', 1)
 					if not t_query: break
