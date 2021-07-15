@@ -2,7 +2,7 @@ import sublime
 import sublime_plugin
 import re
 
-
+word_list = []
 matching = []
 last_choice = ''
 orig_query = ''
@@ -11,30 +11,22 @@ case_separator = re.compile(r'([A-Z])?([^A-Z]*)')
 
 class HippieWordCompletionCommand(sublime_plugin.TextCommand):
 	def run(self, edit, backward=False):
-		global last_choice, lookup_index, matching, orig_query
+		global last_choice, lookup_index, matching, orig_query, word_list
 
 		query_region = self.view.word(self.view.sel()[0])
 		query = self.view.substr(sublime.Region(query_region.a, self.view.sel()[0].end()))
 
 		if query != last_choice:
 			orig_query = query
-			lookup_index = 0 if backward else -1
+			lookup_index = -1 if backward else 0
 			matching = []
 
 			query_splitted_by_case = [item for t in case_separator.findall(query) for item in t if item]
 
-			for word in words_from_cursor_to_end:
+			for word in word_list:
 				if (word != query and word[0] == query[0] and 
 					did_match(word, query, query_splitted_by_case)):
 					matching.append(word)
-
-			
-			temp_list = []
-			for word in words_from_begining_to_cursor:
-				if (word != query and word[0] == query[0] and 
-					did_match(word, query, query_splitted_by_case)):
-					temp_list.append(word)
-			matching.extend(reversed(temp_list))
 	
 			if not matching:
 				for w_list in word_list_global.values():
@@ -46,7 +38,7 @@ class HippieWordCompletionCommand(sublime_plugin.TextCommand):
 			if len(query) > 2: priortize_consecutive(query, matching)
 			if len(query) > 1: priortize_combined(query, matching)
 		else:
-			 lookup_index += +1 if backward else -1
+			 lookup_index += -1 if backward else +1
 	
 		try:
 			last_choice = matching[lookup_index]
@@ -57,14 +49,14 @@ class HippieWordCompletionCommand(sublime_plugin.TextCommand):
 				try: [temp.append(s) for s in w_list if s not in matching and s != query and 
 					s[0] == query[0] and  did_match(s, orig_query, orig_query_splitted_by_case)]
 				except: pass
-			if len(query) > 2: priortize_consecutive(query, temp)
 			if len(query) > 1: priortize_combined(query, temp)
+			if len(query) > 2: priortize_consecutive(query, temp)
 			matching.extend(temp)
 		finally:
 			try:
 				last_choice = matching[lookup_index]
 			except:
-				lookup_index = -1
+				lookup_index = 0 # -1
 				last_choice = matching[lookup_index]
 
 		for caret in self.view.sel():
@@ -80,16 +72,22 @@ class Listener(sublime_plugin.EventListener):
 			word_list_global[view.file_name()] = list(dict.fromkeys(word_pattern.findall(contents)))
 
 	def on_modified_async(self, view):
-		global words_from_begining_to_cursor, words_from_cursor_to_end
+		global words_from_begining_to_cursor, words_from_cursor_to_end, word_list_global, word_list
 		try:
 			first_half  = view.substr(sublime.Region(0, view.sel()[0].begin()))
 			second_half = view.substr(sublime.Region(view.sel()[0].begin(), view.size()))
-			words_from_begining_to_cursor = list(dict.fromkeys(reversed(word_pattern.findall(first_half))))
-			words_from_cursor_to_end = list(dict.fromkeys(word_pattern.findall(second_half)))
+			word_list = word_pattern.findall(second_half)
+			word_list.extend(word_pattern.findall(first_half))
+			word_list = list(dict.fromkeys(reversed(word_list)))
 
-			word_list_global[view.file_name()] = words_from_begining_to_cursor.copy().extend(words_from_cursor_to_end)
+			word_list_global[view.file_name()] = word_list
 		except:
 			pass
+
+	def on_load_async(self, view):
+		global word_list_global
+		contents = view.substr(sublime.Region(0, view.size()))
+		word_list_global[view.file_name()] = list(dict.fromkeys(word_pattern.findall(contents)))
 
 
 def did_match(candidate_word: str, query: str, query_splitted_by_case: list) -> bool:
@@ -116,7 +114,7 @@ def did_match(candidate_word: str, query: str, query_splitted_by_case: list) -> 
 
 def priortize_consecutive(query:str, matches:list) -> None:
 	available_slot = []
-	for i in reversed(range(len(matches))):
+	for i in range(len(matches)):
 		match = matches[i]
 		if query in match:
 			if len(available_slot) > 0:
@@ -128,7 +126,7 @@ def priortize_consecutive(query:str, matches:list) -> None:
 
 def priortize_combined(query:str, matches:list) -> None:
 	available_slot = []
-	for i in reversed(range(len(matches))):
+	for i in range(len(matches)):
 		match = matches[i]
 
 		priortize = False
